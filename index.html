@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Eternal Flame - One Tap. One Day. One Promise.</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-container">
+            <div class="candle-icon">🕯️</div>
+            <h1>Eternal Flame</h1>
+            <p class="tagline">One Tap. One Day. One Promise.</p>
+            
+            <div class="login-form">
+                <input type="email" id="loginEmail" placeholder="Email" autocomplete="email">
+                <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+                <button id="loginBtn" class="primary-btn">Masuk</button>
+                <button id="showRegisterBtn" class="secondary-btn">Belum punya akun?</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Screen -->
+    <div id="registerScreen" class="screen">
+        <div class="login-container">
+            <div class="candle-icon">🕯️</div>
+            <h1>Daftar Akun Baru</h1>
+            
+            <div class="login-form">
+                <input type="text" id="registerUsername" placeholder="Username" maxlength="20">
+                <input type="email" id="registerEmail" placeholder="Email" autocomplete="email">
+                <input type="password" id="registerPassword" placeholder="Password (min 6 karakter)" autocomplete="new-password">
+                <button id="registerBtn" class="primary-btn">Daftar</button>
+                <button id="showLoginBtn" class="secondary-btn">Sudah punya akun?</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Screen -->
+    <div id="gameScreen" class="screen">
+        <!-- Header -->
+        <div class="header">
+            <div class="user-info">
+                <span id="usernameDisplay" class="username"></span>
+                <span id="userTitle" class="title">Wanderer</span>
+                <span id="premiumBadge" class="premium-badge" style="display:none">⭐ Premium</span>
+            </div>
+            <button id="logoutBtn" class="logout-btn">Keluar</button>
+        </div>
+
+        <!-- Main Candle Area -->
+        <div class="main-area">
+            <div id="candleContainer" class="candle-container">
+                <div id="candleFlame" class="candle-flame"></div>
+                <div id="candleBody" class="candle-body basic-candle"></div>
+            </div>
+            
+            <div class="streak-display">
+                <div class="streak-number" id="streakNumber">0</div>
+                <div class="streak-label">Hari Beruntun</div>
+            </div>
+
+            <button id="lightCandleBtn" class="light-btn">
+                Nyalakan Lilin Hari Ini
+            </button>
+            
+            <div id="statusMessage" class="status-message"></div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-bar">
+            <button class="nav-btn active" data-tab="home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Beranda</span>
+            </button>
+            <button class="nav-btn" data-tab="leaderboard">
+                <span class="nav-icon">🏆</span>
+                <span class="nav-label">Peringkat</span>
+            </button>
+            <button class="nav-btn" data-tab="skins">
+                <span class="nav-icon">🎨</span>
+                <span class="nav-label">Skin</span>
+            </button>
+            <button class="nav-btn" data-tab="premium">
+                <span class="nav-icon">⭐</span>
+                <span class="nav-label">Premium</span>
+            </button>
+        </div>
+
+        <!-- Leaderboard Tab -->
+        <div id="leaderboardTab" class="tab-content">
+            <h2>🏆 Peringkat Global</h2>
+            <div id="leaderboardList" class="leaderboard-list">
+                <div class="loading">Memuat...</div>
+            </div>
+        </div>
+
+        <!-- Skins Tab -->
+        <div id="skinsTab" class="tab-content">
+            <h2>🎨 Koleksi Skin Lilin</h2>
+            <div class="skins-grid" id="skinsGrid">
+                <!-- Skins will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Premium Tab -->
+        <div id="premiumTab" class="tab-content">
+            <h2>⭐ Premium</h2>
+            <div class="premium-info">
+                <p>Dapatkan pengalaman eksklusif dengan Premium!</p>
+                <ul>
+                    <li>✨ Skin lilin eksklusif</li>
+                    <li>🎨 Background premium</li>
+                    <li>🖼️ Border nama animasi</li>
+                    <li>👑 Title khusus</li>
+                    <li>🌟 Icon premium</li>
+                </ul>
+                <p class="premium-note">Premium hanya kosmetik - tidak mempengaruhi gameplay</p>
+                <button id="buyPremiumBtn" class="premium-btn">
+                    💎 Beli Premium
+                </button>
+            </div>
+        </div>
+
+        <!-- Admin Panel (Hidden) -->
+        <div id="adminPanel" class="admin-panel" style="display:none">
+            <h2>⚙️ Admin Panel</h2>
+            <div class="admin-controls">
+                <input type="text" id="adminTargetUID" placeholder="UID pengguna">
+                <button id="adminBanBtn" class="admin-btn danger">Ban User</button>
+                <button id="adminUnbanBtn" class="admin-btn">Unban User</button>
+                <button id="adminGrantPremiumBtn" class="admin-btn premium">Grant Premium (30 hari)</button>
+                <button id="adminRemovePremiumBtn" class="admin-btn">Remove Premium</button>
+                <button id="adminResetStreakBtn" class="admin-btn danger">Reset Streak</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio -->
+    <audio id="ambientSound" loop>
+        <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=" type="audio/wav">
+    </audio>
+
+    <!-- Firebase -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
