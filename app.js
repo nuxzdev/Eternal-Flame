@@ -167,11 +167,14 @@ async function handleRegister() {
         document.getElementById('registerBtn').disabled = true;
         document.getElementById('registerBtn').textContent = 'Mendaftar...';
         
+        // 1. Create auth user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
-        // Create user data
-        await set(ref(db, `users/${user.uid}`), {
+        console.log('✅ User auth created:', user.uid);
+        
+        // 2. Prepare user data
+        const userData = {
             username: username,
             email: email,
             streak: 0,
@@ -184,9 +187,35 @@ async function handleRegister() {
             },
             banned: false,
             createdAt: Date.now()
-        });
+        };
         
-        // Auth state change will handle the rest
+        // 3. SAVE BOTH user data AND leaderboard data
+        const updates = {
+            [`users/${user.uid}`]: userData,
+            [`leaderboard/${user.uid}`]: {
+                username: username,
+                streak: 0
+            }
+        };
+        
+        console.log('📝 Saving updates:', updates);
+        
+        // 4. Save all data at once
+        await update(ref(db), updates);
+        
+        console.log('✅ All data saved successfully');
+        
+        showMessage('🎉 Pendaftaran berhasil!', 'success');
+        
+        // 5. Auto login after 1 second
+        setTimeout(async () => {
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (loginError) {
+                console.error('Auto-login failed:', loginError);
+            }
+        }, 1000);
+        
     } catch (error) {
         console.error('Register error:', error);
         showMessage(getErrorMessage(error.code), 'error');
@@ -199,40 +228,59 @@ function checkAuthState() {
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUser = user;
+            console.log('👤 User logged in:', user.uid);
             await loadUserData();
             switchScreen('game');
             initializeGame();
         } else {
             currentUser = null;
             userData = null;
+            console.log('👋 No user logged in');
             switchScreen('login');
         }
     });
 }
 
 async function loadUserData() {
-    if (!currentUser) return;
+    if (!currentUser) {
+        console.log('❌ No current user');
+        return;
+    }
     
-    const userRef = ref(db, `users/${currentUser.uid}`);
-    const snapshot = await get(userRef);
+    console.log('🔄 Loading data for user:', currentUser.uid);
     
-    if (snapshot.exists()) {
-        userData = snapshot.val();
+    try {
+        const userRef = ref(db, `users/${currentUser.uid}`);
+        const snapshot = await get(userRef);
         
-        // Check if banned
-        if (userData.banned) {
-            await signOut(auth);
-            showMessage('Akun Anda telah di-ban', 'error');
-            return;
+        if (snapshot.exists()) {
+            userData = snapshot.val();
+            console.log('✅ User data loaded:', userData);
+            
+            // Check if banned
+            if (userData.banned) {
+                console.log('🚫 User is banned');
+                await signOut(auth);
+                showMessage('Akun Anda telah di-ban', 'error');
+                return;
+            }
+            
+            // Check admin status
+            const adminRef = ref(db, `admins/${currentUser.uid}`);
+            const adminSnapshot = await get(adminRef);
+            isAdmin = adminSnapshot.exists();
+            console.log('👑 Admin status:', isAdmin);
+            
+            updateUI();
+            checkDailyReset();
+            
+        } else {
+            console.error('❌ User data not found in database!');
+            showMessage('Data pengguna tidak ditemukan', 'error');
         }
-        
-        // Check admin status
-        const adminRef = ref(db, `admins/${currentUser.uid}`);
-        const adminSnapshot = await get(adminRef);
-        isAdmin = adminSnapshot.exists();
-        
-        updateUI();
-        checkDailyReset();
+    } catch (error) {
+        console.error('❌ Error loading user data:', error);
+        showMessage('Gagal memuat data pengguna', 'error');
     }
 }
 
@@ -247,25 +295,33 @@ async function handleLogout() {
 }
 
 function initializeGame() {
+    console.log('🎮 Initializing game...');
     loadLeaderboard();
     loadSkins();
     updateCandle();
     
     if (isAdmin) {
         document.getElementById('adminPanel').style.display = 'block';
+        console.log('⚙️ Admin panel shown');
     }
     
     // Listen to user data changes
     onValue(ref(db, `users/${currentUser.uid}`), (snapshot) => {
         if (snapshot.exists()) {
             userData = snapshot.val();
+            console.log('🔄 User data updated:', userData);
             updateUI();
         }
     });
 }
 
 function updateUI() {
-    if (!userData) return;
+    if (!userData) {
+        console.log('⚠️ No user data to update UI');
+        return;
+    }
+    
+    console.log('🎨 Updating UI with data:', userData);
     
     // Update header
     document.getElementById('usernameDisplay').textContent = userData.username;
@@ -286,13 +342,18 @@ function updateUI() {
 }
 
 function updateCandle() {
+    if (!userData) return;
+    
     const candleBody = document.getElementById('candleBody');
     const skinData = SKINS[userData.skin] || SKINS.basic;
     
     candleBody.className = 'candle-body ' + skinData.class;
+    console.log('🕯️ Candle updated with skin:', skinData.name);
 }
 
 function updateCandleStatus() {
+    if (!userData) return;
+    
     const today = new Date().toDateString();
     const lastUpdate = userData.lastUpdate ? new Date(userData.lastUpdate).toDateString() : null;
     const canLightToday = lastUpdate !== today;
@@ -300,6 +361,8 @@ function updateCandleStatus() {
     const btn = document.getElementById('lightCandleBtn');
     const flame = document.getElementById('candleFlame');
     const statusMsg = document.getElementById('statusMessage');
+    
+    console.log('📅 Date check - Today:', today, 'Last Update:', lastUpdate, 'Can light:', canLightToday);
     
     if (canLightToday) {
         btn.disabled = false;
@@ -315,12 +378,19 @@ function updateCandleStatus() {
 }
 
 async function lightCandle() {
-    if (!currentUser || !userData) return;
+    if (!currentUser || !userData) {
+        console.error('❌ Cannot light candle: No user data');
+        showMessage('Data pengguna tidak ditemukan', 'error');
+        return;
+    }
     
     const today = new Date().toDateString();
     const lastUpdate = userData.lastUpdate ? new Date(userData.lastUpdate).toDateString() : null;
     
+    console.log('🔥 Light candle attempt:', { today, lastUpdate });
+    
     if (lastUpdate === today) {
+        console.log('⚠️ Already lit today');
         showMessage('Anda sudah menyalakan lilin hari ini', 'error');
         return;
     }
@@ -337,21 +407,30 @@ async function lightCandle() {
         
         let newStreak = userData.streak || 0;
         
+        console.log('📊 Streak calculation:', {
+            yesterday: yesterdayStr,
+            currentStreak: newStreak,
+            lastUpdate: lastUpdate
+        });
+        
         if (lastUpdate === yesterdayStr) {
             // Continue streak
             newStreak += 1;
+            console.log('✅ Continuing streak:', newStreak);
         } else if (lastUpdate === null) {
             // First time
             newStreak = 1;
+            console.log('🎉 First time lighting:', newStreak);
         } else {
             // Streak broken
             newStreak = 1;
+            console.log('🔄 Streak broken, reset to:', newStreak);
         }
         
         // Calculate title
         const newTitle = calculateTitle(newStreak);
         
-        // Update user data
+        // Prepare updates
         const updates = {
             [`users/${currentUser.uid}/streak`]: newStreak,
             [`users/${currentUser.uid}/lastUpdate`]: Date.now(),
@@ -360,26 +439,48 @@ async function lightCandle() {
             [`leaderboard/${currentUser.uid}/streak`]: newStreak
         };
         
+        console.log('📝 Firebase updates:', updates);
+        
+        // Update Firebase
         await update(ref(db), updates);
+        
+        console.log('✅ Firebase update successful');
+        
+        // Update local data immediately
+        userData.streak = newStreak;
+        userData.lastUpdate = Date.now();
+        userData.title = newTitle;
         
         // Animate
         const flame = document.getElementById('candleFlame');
         flame.classList.add('lit');
         
+        // Update button
+        btn.textContent = 'Sudah Dinyalakan Hari Ini';
+        
         showMessage(`🕯️ Lilin menyala! Streak: ${newStreak} hari`, 'success');
         
-        // Play sound effect (simple beep)
+        // Update UI immediately
+        updateUI();
+        
+        // Play sound effect
         playSound();
         
     } catch (error) {
-        console.error('Light candle error:', error);
-        showMessage('Gagal menyalakan lilin', 'error');
+        console.error('❌ Light candle error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        showMessage(`Gagal menyalakan lilin: ${error.message}`, 'error');
+        
+        // Reset button
+        const btn = document.getElementById('lightCandleBtn');
+        btn.disabled = false;
+        btn.textContent = 'Nyalakan Lilin Hari Ini';
     }
 }
 
 function calculateTitle(streak) {
-    // Will be updated based on leaderboard rank
-    // For now, just based on streak
     if (streak >= 365) return 'Eternal Keeper';
     if (streak >= 100) return 'Flame Guardian';
     if (streak >= 30) return 'Light Bearer';
@@ -392,16 +493,16 @@ async function checkDailyReset() {
     const lastUpdateDate = new Date(userData.lastUpdate);
     const today = new Date();
     
-    // Check if more than 1 day has passed
     const diffDays = Math.floor((today - lastUpdateDate) / (1000 * 60 * 60 * 24));
     
     if (diffDays > 1) {
-        // Streak broken - but we don't auto-reset, just notify on next light
-        console.log('Streak will reset on next candle light');
+        console.log('📅 Streak will reset on next candle light');
     }
 }
 
 function loadLeaderboard() {
+    console.log('🏆 Loading leaderboard...');
+    
     const leaderboardRef = query(
         ref(db, 'leaderboard'),
         orderByChild('streak'),
@@ -413,6 +514,7 @@ function loadLeaderboard() {
         leaderboardDiv.innerHTML = '';
         
         if (!snapshot.exists()) {
+            console.log('📊 No leaderboard data');
             leaderboardDiv.innerHTML = '<div class="loading">Belum ada data</div>';
             return;
         }
@@ -429,8 +531,7 @@ function loadLeaderboard() {
         // Sort descending
         players.sort((a, b) => b.streak - a.streak);
         
-        // Update titles based on rank
-        await updateRankTitles(players);
+        console.log('📊 Leaderboard loaded:', players.length, 'players');
         
         // Display
         players.forEach((player, index) => {
@@ -455,7 +556,6 @@ async function updateRankTitles(players) {
         updates[`users/${player.uid}/title`] = title;
     });
     
-    // Batch update (only if necessary)
     if (Object.keys(updates).length > 0) {
         await update(ref(db), updates);
     }
@@ -500,6 +600,8 @@ function loadSkins() {
         const card = createSkinCard(skinKey, skin);
         skinsGrid.appendChild(card);
     });
+    
+    console.log('🎨 Skins loaded');
 }
 
 function createSkinCard(skinKey, skin) {
@@ -547,6 +649,7 @@ async function selectSkin(skinKey) {
             skin: skinKey
         });
         
+        userData.skin = skinKey;
         updateCandle();
         loadSkins();
         showMessage('Skin berhasil dipilih!', 'success');
@@ -557,23 +660,19 @@ async function selectSkin(skinKey) {
 }
 
 function handleNavigation(btn) {
-    // Update active button
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     
     const tab = btn.dataset.tab;
     
-    // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     
-    // Show main area for home
     const mainArea = document.querySelector('.main-area');
     if (tab === 'home') {
         mainArea.style.display = 'flex';
     } else {
         mainArea.style.display = 'none';
         
-        // Show selected tab
         if (tab === 'leaderboard') {
             document.getElementById('leaderboardTab').classList.add('active');
         } else if (tab === 'skins') {
@@ -616,7 +715,7 @@ async function adminAction(action) {
                 break;
                 
             case 'grantPremium':
-                const until = Date.now() + (30 * 24 * 60 * 60 * 1000); // 30 days
+                const until = Date.now() + (30 * 24 * 60 * 60 * 1000);
                 updates[`users/${targetUID}/premium/active`] = true;
                 updates[`users/${targetUID}/premium/until`] = until;
                 showMessage('Premium berhasil diberikan (30 hari)', 'success');
@@ -646,33 +745,46 @@ async function adminAction(action) {
 
 // Helper Functions
 function showMessage(message, type) {
-    // Create toast notification
+    // Remove existing toast
+    const existingToasts = document.querySelectorAll('.toast-message');
+    existingToasts.forEach(toast => toast.remove());
+    
     const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    
     toast.style.cssText = `
         position: fixed;
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: ${type === 'error' ? '#f87171' : '#4ade80'};
+        background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6'};
         color: white;
         padding: 15px 25px;
         border-radius: 10px;
         z-index: 10000;
         box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         animation: slideIn 0.3s ease;
+        font-weight: 500;
+        text-align: center;
+        min-width: 250px;
+        max-width: 90%;
     `;
+    
     toast.textContent = message;
     
     document.body.appendChild(toast);
     
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 300);
     }, 3000);
 }
 
 function playSound() {
-    // Simple audio context beep
     try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioContext.createOscillator();
@@ -681,7 +793,7 @@ function playSound() {
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
         
-        oscillator.frequency.value = 528; // Healing frequency
+        oscillator.frequency.value = 528;
         oscillator.type = 'sine';
         
         gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
@@ -708,8 +820,14 @@ function getErrorMessage(errorCode) {
             return 'Password salah';
         case 'auth/invalid-credential':
             return 'Email atau password salah';
+        case 'auth/network-request-failed':
+            return 'Koneksi internet bermasalah';
+        case 'auth/too-many-requests':
+            return 'Terlalu banyak percobaan, coba lagi nanti';
+        case 'auth/operation-not-allowed':
+            return 'Metode login tidak diizinkan';
         default:
-            return 'Terjadi kesalahan';
+            return `Terjadi kesalahan (${errorCode})`;
     }
 }
 
@@ -745,3 +863,37 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// TEST FUNCTION - Tambahkan di akhir
+async function testDatabase() {
+    console.log('🧪 Running database test...');
+    
+    try {
+        // Test 1: Write test data
+        const testRef = ref(db, 'testConnection');
+        await set(testRef, { 
+            test: 'Database connection test',
+            timestamp: Date.now() 
+        });
+        console.log('✅ Test 1: Write successful');
+        
+        // Test 2: Read test data
+        const snapshot = await get(testRef);
+        console.log('✅ Test 2: Read successful:', snapshot.val());
+        
+        // Test 3: Check if users path exists
+        const usersRef = ref(db, 'users');
+        const usersSnapshot = await get(usersRef);
+        console.log('✅ Test 3: Users path exists:', usersSnapshot.exists());
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Database test failed:', error);
+        return false;
+    }
+}
+
+// Run test on load
+setTimeout(() => {
+    testDatabase();
+}, 2000);
